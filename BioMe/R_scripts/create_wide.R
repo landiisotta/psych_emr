@@ -12,7 +12,7 @@ require(tidyr)
 require(stringr)
 
 # Data paths
-data_path <- "/sc/hydra/work/lepowl01/BioMe_Output_Files"
+data_path <- ""
 # Files
 subj_list_file <- "masterrgnidlist.csv"
 quest_file <- "Questionnaire.txt"

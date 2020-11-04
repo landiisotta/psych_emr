@@ -11,16 +11,13 @@ require(tidyr)
 require(stringr)
 
 # Data path
-data_path <- "/sc/hydra/work/lepowl01/BioMe_Pull"
+data_path <- ""
 # File names
 subj_list_file <- "masterrgnidlist.csv"
 social_history_file<- "Social_History.txt"
 diagn_file <- "Encounter_Diagnosis.txt"
 vitals_file <- "Vitals.txt"
 med_file <- "Medications.txt"
-
-#DELETE ME
-ICD10<-diag_df[dx_code==ICD10,]*** #FIGURE THIS OUT LATER
 
 # Import data
 subj_df <- fread(file.path(data_path, subj_list_file), sep = "|",
