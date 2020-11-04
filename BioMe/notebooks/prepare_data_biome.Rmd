@@ -1,0 +1,408 @@
+---
+title: "Create datasets for social determinant of health study"
+output: html_notebook
+---
+
+Steps:
+
+1. Select subjects that have been in the health system longer 
+than a year and present >=2 encounters;
+
+2. Create dataset with one-time assessments (wide format);
+
+3. Create dataset with longitudinal assessments (long format).
+
+```{r, message=FALSE}
+# Required libraries
+require(data.table)
+require(dplyr)
+```
+
+
+```{r}
+# Data paths and file names
+data_path <- '../data'
+out_path <- '../out'
+
+# Longitudinal tables
+diag_file <- 'Encounter_Diagnosis.txt'
+med_file <- 'Medications.txt'
+vitals_file <- 'Vitals.txt'
+sh_file <- 'Social_History.txt'
+
+# One-time assessment tables
+dem_file <- 'Demographics.txt'
+quest_file <- 'Questionnaire.txt'
+```
+
+## Read data tables
+For each table:
+
+1. Transform encounter date or corresponding column (if available) to object 
+of class "Date";
+
+2. Drop duplicated rows (entirely repeated entries) and subjects with 
+missing information for the features of interest;
+
+3. Order dataset according to subject id (i.e., "rgnid") and encounter 
+date (if available).
+
+```{r, results='hide', echo=FALSE}
+feat_vocab <- fread("../data/BRSPD_Data_Dictionary_v3.csv", sep = ",",
+                    header = TRUE, stringsAsFactors = FALSE)
+```
+
+
+**Diagnoses**: _dx_code1, dx_code_type_ features.
+```{r}
+# Read diagnosis file
+diag_df <- fread(file.path(data_path, diag_file), sep = '|',
+                header = TRUE, stringsAsFactors = FALSE)
+diag_df$encounter_date <-as.Date(diag_df$encounter_date, "%m/%d/%Y")
+
+# Drop duplicated rows and rows with dx_code1 missing
+diag_df <- diag_df[!is.na(diag_df$dx_code1) & !duplicated(diag_df, by=NULL)]
+# Order rows by subject id and encounter date
+setorder(diag_df, rgnid, encounter_date)
+```
+
+```{r, echo=FALSE}
+print("Column names, data elements, and descriptions:")
+feat_vocab[`BSPD File`==diag_file & 
+             Fields %in% names(diag_df)][, .(Fields, 
+                                             `Data Elements`, 
+                                             Descriptions)]
+```
+
+**Demographics**
+```{r}
+# Read demographics
+demog_df <- fread(file.path(data_path, dem_file), sep = '|',
+                 stringsAsFactors = FALSE, header = TRUE)
+
+# Drop duplicated rows
+demog_df <- demog_df[!duplicated(demog_df, by=NULL)]
+# Order rows by subject id
+setorder(demog_df, rgnid)
+```
+
+```{r, echo=FALSE}
+print("Column names, data elements, and descriptions:")
+feat_vocab[`BSPD File`==dem_file & 
+             Fields %in% names(demog_df)][, .(Fields, 
+                                             `Data Elements`, 
+                                              Descriptions)]
+```
+
+**Questionnaire** (column descriptions are not displayed, 
+see number of features below).
+```{r}
+# Read questionnaire
+quest_df <- fread(file.path(data_path, quest_file), sep="|",
+                  stringsAsFactors=FALSE, header=TRUE)
+quest_df$SPECIMEN_COLLECTION_DATE_TIME <- as.Date(quest_df$SPECIMEN_COLLECTION_DATE_TIME, 
+                                                  "%m/%d/%Y")
+
+# Drop duplicated rows
+quest_df <- quest_df[!duplicated(quest_df, by=NULL)]
+# Order rows by subject id
+setorder(quest_df, rgnid)
+print(sprintf("Number of columns: %d", length(names(quest_df))))
+```
+
+**Social history**: _TOBACCO_USER, IS_ALCOHOL_USER, IS_ILL_DRUG_USER, SEXUALLY_ACTIVE_ features.
+```{r}
+# Read social history
+sh_df <- fread(file.path(data_path, sh_file),
+               sep = "|", 
+               stringsAsFactors = FALSE, 
+               header = TRUE,
+               quote = "")
+sh_df$encounter_date <- as.Date(sh_df$encounter_date, "%m/%d/%Y")
+
+# Drop duplicated rows and rows with at least one feature missing
+sh_df <- sh_df[rowSums(is.na(sh_df[, .(TOBACCO_USER, IS_ALCOHOL_USER, 
+                                       IS_ILL_DRUG_USER, 
+                                       SEXUALLY_ACTIVE)])) == 0 & 
+                 !duplicated(sh_df, by=NULL)]
+setorder(sh_df, rgnid, encounter_date)
+```
+
+```{r, echo=FALSE}
+print("Column names, data elements, and descriptions:")
+sh_names <- c('TOBACCO_USER', 'IS_ALCOHOL_USER', 
+              'IS_ILL_DRUG_USER', 'SEXUALLY_ACTIVE')
+feat_vocab[`BSPD File`==sh_file & 
+             Fields %in% sh_names][, .(Fields, 
+                                       `Data Elements`, 
+                                        Descriptions)]
+```
+
+**Vitals**: _vital_sign_measurement, vital_sign_description_ features.
+```{r}
+# Read vitals
+vitals_df <- fread(file.path(data_path, vitals_file),
+               sep = "|", stringsAsFactors = FALSE, header = TRUE)
+vitals_df$encounter_date <-as.Date(vitals_df$encounter_date, "%m/%d/%Y")
+
+# Drop duplicated rows and rows with vital_sign_measurement missing
+vitals_df <- vitals_df[!is.na(vitals_df$vital_sign_measurement) & !duplicated(vitals_df, by=NULL)]
+# Order rows by subject id and encounter date
+setorder(vitals_df, rgnid, encounter_date)
+```
+
+```{r, echo=FALSE}
+print("Column names, data elements, and descriptions:")
+feat_vocab[`BSPD File`==vitals_file & 
+             Fields %in% names(vitals_df)][, .(Fields, 
+                                               `Data Elements`, 
+                                               Descriptions)]
+```
+
+**Medications**: _DESCRIPTION_ feature.
+```{r}
+# Read medications
+med_df <- fread(file.path(data_path, med_file),
+               sep = "|", stringsAsFactors = FALSE, header = TRUE,
+               quote="")
+med_df$encounter_date <-as.Date(med_df$encounter_date, "%m/%d/%Y")
+
+# Drop duplicated rows and rows with DESCRIPTION missing
+med_df <- med_df[!is.na(med_df$DESCRIPTION) & !duplicated(med_df, by=NULL)]
+# Order rows by subject id and encounter date
+setorder(med_df, rgnid, encounter_date)
+```
+
+```{r, echo=FALSE}
+print("Column names, data elements, and descriptions:")
+feat_vocab[`BSPD File`==med_file & 
+             Fields %in% c('DESCRIPTION', 'SIG')][, .(Fields, 
+                                                      `Data Elements`, 
+                                                      Descriptions)]
+```
+
+## Find subject list
+> Based on diagnosis file.
+
+```{r}
+# Count encounters
+diag_enc_count <- diag_df[, .N, .(rgnid, encounter_date)]
+diag_subj_count <- diag_enc_count[, .N, rgnid]
+```
+
+```{r, message=FALSE}
+# Compute length-of-stay in the HS
+hstime_df<- as.data.table(diag_df %>%
+            group_by(rgnid) %>%
+            summarize(first_visit = min(encounter_date), 
+                      last_visit = max(encounter_date), 
+                      stretch = as.numeric(last_visit - first_visit)))
+hstime_df$n_encounters <- diag_subj_count$N
+```
+
+```{r}
+# Save n_encounter and length_of_stay to file
+fwrite(hstime_df, sep = "|", file.path(out_path, 'encounters_LOS.txt'))
+```
+
+```{r}
+# Select subjects
+subj_list <- hstime_df[n_encounters >= 2 & stretch > 365, rgnid]
+# Save subject list
+fwrite(as.list(subj_list), sep='\n', file.path(out_path, 'subjectlist.txt'))
+```
+
+```{r, echo=FALSE}
+print(sprintf("Number of subjects selected: %d", length(subj_list)))
+```
+
+# Create wide dataset
+> For duplicated questionnaire rows retain the entry that maximizes the 
+available information (not necessarily the most recent).
+
+### Questionnaire
+```{r}
+# Number of subjects with repeated questionnaire administrations
+count_rgnid <- quest_df[,.N,rgnid][order(-N)]
+table(count_rgnid$N)
+```
+
+```{r}
+# Select the questionnaire responses of the subjects with multiple observation
+repeated_rgnid <- count_rgnid[N >= 2, rgnid]
+quest_repeated <- quest_df[rgnid %in% repeated_rgnid] 
+setorder(quest_repeated, rgnid, SPECIMEN_COLLECTION_DATE_TIME)
+# Count the missing information for these duplicated rows
+quest_repeated$na_counts <- rowSums(is.na(quest_repeated))
+
+# Select ONLY the entry that maximizes the available information, for repeated subjects.
+# If the number of available information is the same, select the most recent 
+# administration.
+setorder(quest_repeated, rgnid, -SPECIMEN_COLLECTION_DATE_TIME)
+repeated_id <- quest_repeated[quest_repeated[, .I[which.min(na_counts)], rgnid]$V1]
+```
+
+```{r}
+# Drop subjects with repeated questionnaires and add the selected ones
+quest_df <- quest_df[!rgnid %in% repeated_id$rgnid]
+quest_df <- rbind(quest_df, repeated_id[,!"na_counts"])
+setorder(quest_df, rgnid, ENROLLMENT_DATE, 
+         SPECIMEN_COLLECTION_DATE_TIME) 
+```
+
+```{r, echo=FALSE}
+print(sprintf("Number of unique subjects with questionnaire entries: %d", nrow(quest_df)))
+```
+
+### Demographics
+```{r}
+# Add demographic information to questionnaire data
+
+# Check if repeated observation exist (e.g., marital status can change)
+table(demog_df[,.N,rgnid][order(-N)]$N)
+```
+
+### Wide format
+```{r}
+# Create unique wide dataset with only the subjects in common:
+subj_shared = intersect(demog_df$rgnid, quest_df$rgnid)
+
+quest_df <- quest_df[rgnid %in% subj_shared]
+demog_df <- demog_df[rgnid %in% subj_shared]
+wide_all = merge(quest_df, demog_df, 
+               by="rgnid", all=TRUE)
+
+# Save wide dataset complete
+fwrite(wide_all, sep='|', file.path(out_path, 'wide_complete.txt'))
+```
+
+```{r, echo=FALSE}
+print(sprintf("Number of subjects with both demographics and questionnaire: %d", length(subj_shared)))
+```
+
+```{r}
+# Select only subjects in subject list
+wide_rid <- wide_all[rgnid %in% subj_list]
+
+# Drop columns with > 50% NAs
+id_col <- names(wide_rid)[which(colSums(is.na(wide_rid))<(nrow(wide_rid)/2))]
+wide_rid <- wide_rid[, ..id_col]
+```
+
+```{r, echo=FALSE}
+print(sprintf("Number of subjects: %d", nrow(wide_rid)))
+print(sprintf("Selected columns (N = %d):", ncol(wide_rid) - 1))
+print(id_col)
+```
+
+# Create long dataset
+```{r}
+# VITALS: create new column ("vs_code") pasting vitals and unit of measure
+# Select: vs_code, vital_sign_description
+# Add label column
+vitals_df$vs_code <- paste(vitals_df$vital_sign_measurement, 
+                           vitals_df$vital_sign_unit_of_measure, sep="::")
+vitals_rid <- vitals_df[, .(rgnid, encounter_date, 
+                            code=vs_code,
+                            description=vital_sign_description)]
+vitals_rid$label <- rep("vitals", nrow(vitals_rid))
+
+# DIAGNOSIS: create new column dx_code pasting dx_code1 and dx_code_type
+# Add label column
+diag_df$dx_code <- paste(diag_df$dx_code1, 
+                         diag_df$dx_code_type, sep = "::")
+diagn_rid <- diag_df[, .(rgnid, encounter_date,
+                          code = dx_code,
+                          description = dx_name)]
+diagn_rid$label <- rep("diagnosis", nrow(diagn_rid))
+
+# SOCIAL HISTORY
+sh_rid <- data.table::melt(sh_df[,.(rgnid, encounter_date, 
+                           smoking=TOBACCO_USER, 
+                           alcohol=IS_ALCOHOL_USER, 
+                           drugs=IS_ILL_DRUG_USER, 
+                           sex=SEXUALLY_ACTIVE)],
+                           id.vars = c('rgnid','encounter_date'),
+                           variable.name = 'description',
+                           value.name = 'code')
+sh_rid<-sh_rid[, .(rgnid, encounter_date, code, description)]
+sh_rid$label <- rep('sh', nrow(sh_rid))
+
+# MEDICATIONS
+med_rid <- med_df[, .(rgnid, encounter_date, 
+                            code=DESCRIPTION,
+                            description=SIG)]
+med_rid$label <- rep("meds", nrow(med_rid))
+
+# Merge all
+df_long<-rbind(diagn_rid, vitals_rid, sh_rid, med_rid)
+
+setorder(df_long, rgnid, encounter_date)
+```
+
+```{r, message=FALSE}
+# Drop NAs in sh
+# print("Found missing information for:") 
+# print(unique(df_long[is.na(code), label])) #No missing info
+
+df_long<- df_long[!is.na(code),]
+
+df_long <- df_long[!duplicated(df_long, by=NULL), ]
+
+# Save complete 
+fwrite(df_long, sep="|", 
+       file= file.path(out_path,"long_complete.txt"))
+```
+
+```{r, echo=FALSE}
+print(sprintf("Number of long format entries %d", nrow(df_long)))
+```
+
+```{r, message=FALSE}
+# Save EHRs for patients with at least two encounters and that have been 
+# in the EHR system for at least a year
+df_longrid <- df_long[rgnid %in% subj_list,]
+setorder(df_longrid, rgnid, encounter_date)
+
+# Find subjects in common to the two datasets and dump the tables
+longwide_subj <- intersect(unique(df_longrid$rgnid), unique(wide_rid$rgnid))
+
+fwrite(wide_rid[rgnid %in% longwide_subj], sep = '|', 
+       file.path(out_path, 'wide_dataset.txt'))
+fwrite(df_longrid[rgnid %in% longwide_subj], sep="|", 
+       file= file.path(out_path,"long_dataset.txt"))
+```
+
+```{r, echo=FALSE}
+print(sprintf("Number of subjects: %d", length(unique(df_longrid$rgnid))))
+print(sprintf("Number of subjects for SDOH study: %d", length(longwide_subj)))
+```
+
+```{r}
+# Encounter descriptions: median [min/max] of encounters for each label
+long_rid <- df_longrid[rgnid %in% longwide_subj]
+long_count <- long_rid[, .N, .(rgnid, label)]
+tmp <- long_count[, .(median(N), min(N), max(N)), by=.(label)]  
+names(tmp) <- c('label', 'median', 'min', 'max')
+tmp
+
+# Missing data: percentage of missing data for features 
+# and median (min/max) of missing data percentages for subjects.
+na_counts_feat <- colSums(is.na(wide_rid[,-1]))/nrow(wide_rid)
+```
+
+```{r, echo=FALSE}
+print("Percentage of NAs for each feature:")
+na_counts_feat
+```
+
+```{r}
+na_counts_subj <- rowSums(is.na(wide_rid[,-1]))/(ncol(wide_rid)-1)
+```
+
+```{r, echo=FALSE}
+print(sprintf("Percentage (median [min, max]) for each subject: %d [%d, %.2f]", 
+              median(na_counts_subj), min(na_counts_subj),
+        max(na_counts_subj)))
+```
+
